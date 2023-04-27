@@ -97,7 +97,7 @@ See: https://github.com/moby/moby/issues/42275
 
 ## Build Instructions
 
-The image can be build from the GitHub repo https://github.com/snowsnoot/unifi-unvr-arm64
+The image can be built from the GitHub repo https://github.com/snowsnoot/unifi-unvr-arm64
 
 ```
 git clone https://github.com/snowsnoot/unifi-unvr-arm64
@@ -105,8 +105,14 @@ cd unifi-unvr-arm64
 scripts/fwextract.sh {unvr_firmware_download_url}
 docker build -t {tag_name} .
 ```
+Note: The UNVR firmware bundled on UBNT's website contains an outdated Protect deb file. You can fetch the newer deb file by checking the JSON output of the command below and looking in it for the Protect deb file. Then you can replace the .deb file in the `firmware` directory with the updated one before running `docker build`.
+
+```
+curl https://fw-update.ubnt.com/api/firmware-latest | jq
+curl -o firmware/unifi_protect_<version>.deb {updated_protect_deb_url}
+rm firmware/unifi_protect_<old_unifi_protect_version>.deb
+```
 
 Disclaimer: This creators of this repo and associated container images are not affiliated with Ubiquiti Networks in any way and no license or warranty is provided or implied. This repo only uses data and files that can be freely found on the internet. Use at your own risk.
 
 Credits: This repo and container image is a fork of https://github.com/markdegrootnl/unifi-protect-arm64
-
