@@ -15,4 +15,3 @@ services:
     network_mode: 'host'
     restart: unless-stopped
     image: 'snowsnoot/unifi-unvr:latest'
-
