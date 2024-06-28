@@ -1,18 +1,21 @@
-FROM arm64v8/debian:11-slim
+FROM arm64v8/debian:11
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
  && apt-get -y install --no-install-recommends \
             curl \
-            gnupg \
+            gnupg2 \
             apt-transport-https \
             ca-certificates \
             pcregrep \
             iproute2 \
             ethtool \
             avahi-daemon \
-            avahi-utils
+            avahi-utils \
+            lsb-release \
+            sysstat \
+            debian-archive-keyring
 
 RUN curl -sL https://deb.nodesource.com/setup_16.x | bash -
 
@@ -29,7 +32,12 @@ RUN apt-get -y install --no-install-recommends /var/tmp/ubnt-archive-keyring_*_a
 RUN echo 'deb https://apt.artifacts.ui.com bullseye main release beta' > /etc/apt/sources.list.d/ubiquiti.list \
  && chmod 666 /etc/apt/sources.list.d/ubiquiti.list
 
+RUN curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor > /usr/share/keyrings/nginx-archive-keyring.gpg 
+
+RUN echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/debian `lsb_release -cs` nginx" > /etc/apt/sources.list.d/nginx.list
+
 RUN apt-get update \
+ && apt-get -y install --no-install-recommends nginx \
  && apt-get -y install --no-install-recommends -o Dpkg::Options::="--force-confnew" /var/tmp/*.deb
 
 RUN rm -f /var/tmp/*.deb \
@@ -44,6 +52,8 @@ RUN rm -f /var/tmp/*.deb \
            /lib/systemd/system/postgresql-cluster\@14-protect.service.d \
  && pg_dropcluster --stop 9.6 main \
  && rm -rf /lib/modules-load.d/*
+
+RUN usermod -G unifi-streaming unifi-protect
 
 COPY static_files/etc /etc/
 COPY static_files/usr /usr/

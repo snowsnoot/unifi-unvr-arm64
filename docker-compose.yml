@@ -7,6 +7,7 @@ services:
       - '/run'
       - '/run/lock'
       - '/tmp'
+      - '/var/opt/unifi-protect/tmp'
     volumes:
       - '/sys/fs/cgroup:/sys/fs/cgroup:ro'
       - '/storage/srv:/srv'
