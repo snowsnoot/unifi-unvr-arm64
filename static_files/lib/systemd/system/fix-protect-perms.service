@@ -1,0 +1,11 @@
+[Unit]
+Description=Fix UniFi Protect permissions
+After=unifi-protect.service
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/fix_protect_perms.sh
+TimeoutSec=3

@@ -1,0 +1,107 @@
+#!/bin/bash
+
+PKG="unifi-protect"
+USER="unifi-protect"
+GROUP="unifi-protect"
+DB_USER="unifi-protect"
+DB_PORT=5433
+LOGS_DIR="/var/log/$PKG"
+EXTERNAL_MINIMUM_SPACE=67108864 # 64 GB
+
+# Create DB user
+su postgres -c "createuser $DB_USER -p $DB_PORT -d" || true
+
+is_link() {
+  [ -L "$1" ] && [ -e "$1" ] && return
+  false
+}
+
+get_disk_space() {
+  df "$1" -k | tail -n 1 | awk '{printf $2}'
+}
+
+# clean up ems log if too big
+clean_up_ems_log() {
+  local dir=$1
+  local ems_log_path="$dir/logs/ems.00.log"
+
+  local MAX_SIZE=20971520 # 20 MB
+  if [ -f $ems_log_path ]; then
+    if [ $(stat -c%s $ems_log_path) -gt $MAX_SIZE ]; then
+      rm -f $ems_log_path
+    fi
+  fi
+}
+
+# External storage available
+if (mountpoint -q /srv || is_link /srv) && [ $(get_disk_space /srv) -ge $EXTERNAL_MINIMUM_SPACE ] && [ ! -d /srv/unifi-protect/video ]; then
+  if [ ! -d $UFP_EXTERNAL_DIR ]; then
+    # Create external directory
+    mkdir $UFP_EXTERNAL_DIR
+    chown $USER:$GROUP $UFP_EXTERNAL_DIR
+  fi
+
+  if [ -d $UFP_INTERNAL_DIR ]; then
+    if [ "$(find ${UFP_INTERNAL_DIR}/ -maxdepth 1 -mindepth 1 -type d | wc -l)" -gt 0 ]; then
+      # Unmount temp filesystem from internal directory, ignore if not exists
+      umount -l $UFP_INTERNAL_DIR/temp 2>/dev/null || true
+
+      # Move everything to external directory
+      # mv $(find $UFP_INTERNAL_DIR -maxdepth 1 -mindepth 1 -type d) $UFP_EXTERNAL_DIR
+      rsync -a $UFP_INTERNAL_DIR/ $UFP_EXTERNAL_DIR/
+
+      # Update DB records, due to we support motion only recording if NVR has buildIn SSD
+      psql -U $DB_USER -p $DB_PORT -c "UPDATE \"recordingFiles\" SET folder = REPLACE(folder, '/data/unifi-protect', '/srv/unifi-protect')"
+      psql -U $DB_USER -p $DB_PORT -c "UPDATE \"backupFiles\" SET path = REPLACE(path, '/data/unifi-protect', '/srv/unifi-protect')"
+      psql -U $DB_USER -p $DB_PORT -c "UPDATE \"updates\" SET path = REPLACE(path, '/data/unifi-protect', '/srv/unifi-protect')"
+
+      # Delete internal directory
+      rm -rf "${UFP_INTERNAL_DIR:?}"/*
+    fi
+  fi
+
+  # Check disk has enough free spaces to start Protect
+  free_spaces=$(df -k /srv | tail -n 1 | awk '{printf $4}')
+  # disk quota hard limit is 32G, set the MIN_SPACES to 33 GB
+  MIN_SPACES=34603008
+  GB=1048576
+  if [ "${free_spaces}" -lt "${MIN_SPACES}" ]; then
+    num=$(((MIN_SPACES - free_spaces) / GB + 1))
+    find $UFP_VIDEO_DIR -type f -printf '%T+ %p\n' | grep '0_rotating' | sort | head -n ${num} | awk '{print $2}' | xargs rm
+  fi
+else
+  if [ ! -d $UFP_INTERNAL_DIR ]; then
+    # Create internal directory
+    mkdir $UFP_INTERNAL_DIR
+    chown $USER:$GROUP $UFP_INTERNAL_DIR
+  fi
+fi
+
+# Support directories
+mkdir -p $UFP_BACKUPS_DIR $UFP_JSONDB_DIR $UFP_SOCKETS_DIR $UFP_TMPFS_DIR $LOGS_DIR
+chown -R $USER:$GROUP $UFP_BACKUPS_DIR $UFP_JSONDB_DIR $UFP_SOCKETS_DIR $UFP_TMPFS_DIR $LOGS_DIR
+
+# Make sure unifi-protect permissions
+if [ -d $UFP_INTERNAL_DIR ]; then
+  clean_up_ems_log $UFP_INTERNAL_DIR
+
+  if [ -L $UFP_INTERNAL_DIR ]; then
+    chown -c -h $USER:$GROUP $UFP_INTERNAL_DIR
+    chown -c -R $USER:$GROUP $UFP_INTERNAL_DIR/ | tail -n 10
+  else
+    chown -c -R $USER:$GROUP $UFP_INTERNAL_DIR | tail -n 10
+  fi
+fi
+
+if [ -d $UFP_EXTERNAL_DIR ]; then
+  clean_up_ems_log $UFP_EXTERNAL_DIR
+
+  chown -c $USER:$GROUP $UFP_EXTERNAL_DIR
+  chown -c -R $USER:$GROUP $(find $UFP_EXTERNAL_DIR -mindepth 1 -maxdepth 1 -type d -not -path "$UFP_EXTERNAL_DIR/cv" -prune -printf "%p ") | tail -n 10
+  find $UFP_EXTERNAL_DIR/cv -maxdepth 1 -type d -exec chown -c $USER:$GROUP {} +
+fi
+
+if ! findmnt -t tmpfs -m $UFP_TMPFS_DIR 1>&2>/dev/null; then
+  # Mount temp filesystem
+  mount -t tmpfs -o size=$UFP_TMPFS_SIZE tmpfs $UFP_TMPFS_DIR || true
+fi

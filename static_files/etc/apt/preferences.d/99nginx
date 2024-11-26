@@ -1,0 +1,4 @@
+Package: *
+Pin: origin nginx.org
+Pin: release o=nginx
+Pin-Priority: 900' > /etc/apt/preferences.d/99nginx

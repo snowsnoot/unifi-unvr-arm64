@@ -54,10 +54,17 @@ RUN rm -f /var/tmp/*.deb \
  && rm -rf /lib/modules-load.d/*
 
 RUN usermod -G unifi-streaming unifi-protect
+RUN systemctl disable bootup-top-invoke.service \
+ && systemctl mask bootup-top-invoke.service \
+ && systemctl disable bootup-bottom-invoke.service \
+ && systemctl mask bootup-bottom-invoke.service
 
 COPY static_files/etc /etc/
 COPY static_files/usr /usr/
 COPY static_files/sbin /sbin/
+COPY static_files/lib /lib/
+
+RUN systemctl enable fix-protect-perms.service
 
 VOLUME ["/srv", "/data", "/persistent"]
 
