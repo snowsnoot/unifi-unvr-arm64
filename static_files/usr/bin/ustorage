@@ -54,7 +54,7 @@ EOT
 	cat <<EOT
 {
     "hotspare": false,
-    "raid": "single"
+    "raid": "raid0"
 }
 EOT
 
