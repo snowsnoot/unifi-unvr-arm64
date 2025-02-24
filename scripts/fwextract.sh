@@ -18,7 +18,7 @@ mkdir -p ${firmware_dir}
 cd ${firmware_dir}
 
 curl -o ${firmware_filename} $1
-sudo binwalk --run-as=root -e ${firmware_filename}
+sudo binwalk -e ${firmware_filename}
 
 dpkg-query --admindir=_${firmware_filename}.extracted/squashfs-root/var/lib/dpkg/ -W -f='${package} | ${Maintainer}\n' | grep -E "@ubnt.com|@ui.com" | cut -d "|" -f 1 > packages.txt
 
